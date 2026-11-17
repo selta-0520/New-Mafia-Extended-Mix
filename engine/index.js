@@ -4,7 +4,7 @@ const { ROLE: ROLE_, LOANABLE, MAGIC_DAY } = require('../roles');
 const U = require('./util');
 const AB = require('./abilities');
 const { assignRoles } = require('./assign');
-const { startNight, resolveNight } = require('./night');
+const { startNight, resolveNight, instantInfo } = require('./night');
 const RPS = require('./rps');
 const { resolveVote, resolveBoom, checkWin, weight, prophetCheck, tallyVote, announceTally, confirmTally, confirmVoters } = require('./vote');
 
@@ -15,6 +15,7 @@ function setNightAct(room, p, b) {
   const opt = AB.nightOptions(room, p, b.mode);
   if (!opt) U.fail(p.s.blockNight === room.day ? '유혹당해서 오늘 밤에는 능력을 쓸 수 없어요.' : '지금 쓸 수 있는 밤 능력이 없어요.');
   const old = room.night.acts[p.id] || {};
+  if (old.done) U.fail('이미 결과를 확인했어요. 오늘 밤에는 다시 고를 수 없어요.');
   const act = { target: null, mode: opt.mode || null, text: typeof b.text === 'string' ? b.text.slice(0, 100) : (old.text || '') };
   const clear = b.target === null || b.target === '' || b.target === undefined;
   if (!clear) {
@@ -22,6 +23,12 @@ function setNightAct(room, p, b) {
     act.target = b.target;
   } else if (b.keepTarget && old.target && opt.targets.includes(old.target)) act.target = old.target; // 모드만 바꿀 때
   if (act.target || act.text || act.mode) room.night.acts[p.id] = act; else delete room.night.acts[p.id];
+  // 정보를 얻는 능력(스파이·경찰 등)은 고르는 순간 결과를 바로 알려 주고, 그 선택은 잠근다
+  if (act.target && room.night.acts[p.id] === act) {
+    const t = U.byId(room, act.target);
+    const kind = t ? instantInfo(room, p, t) : null;
+    if (kind) act.done = kind;
+  }
   // 마술사: 능력을 쓰기로 하면 바로 시민 팀 직업 하나를 랜덤으로 얻는다 (그날 밤 그 능력을 쓸 수 있다)
   if (p.role === 'magician' && !p.s.loan && act.mode === 'on') {
     const en = room.settings.enabledRoles;

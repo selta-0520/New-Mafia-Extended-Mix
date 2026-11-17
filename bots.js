@@ -379,7 +379,7 @@ function botNight(room, p) {
     return;
   }
   let opt = E.AB.nightOptions(room, p);
-  if (!opt) return;
+  if (!opt || opt.locked) return; // (이미 결과를 받은 능력은 다시 쓰지 않는다)
   if (chance(L.skip)) return;
   if (p.role === 'magician' && opt.noTarget) { // 마술사: 능력을 쓰기로 하면 바로 얻은 직업의 능력을 쓴다
     if (chance(0.7)) { act(room, p, { type: 'night', target: null, mode: 'on' }); if (p.s.loan) botNight(room, p); }

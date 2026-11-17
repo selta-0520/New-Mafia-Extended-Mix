@@ -171,7 +171,7 @@ function resolveNight(room) {
     const opt = AB.nightOptions(room, p, a.mode); if (!opt) continue;
     const t = U.byId(room, a.target);
     if (!t || !opt.targets.includes(t.id)) continue;
-    list.push({ p, t, mode: opt.mode || a.mode, text: a.text });
+    list.push({ p, t, mode: opt.mode || a.mode, text: a.text, instant: a.done || null });
   }
   // ---- 2. (암살자는 접선 뒤 직접 죽이는 능력이라 5번에서 공격으로 처리)
   // ---- 3. 닌자: 대상 맞바꾸기
@@ -187,7 +187,7 @@ function resolveNight(room) {
   list = list.filter((x) => x.p.role !== 'ninja');
 
   // ---- 4. 마피아 공격 투표 정리
-  const atk = list.filter((x) => U.canAttackAsMafia(room, x.p));
+  const atk = list.filter((x) => !x.instant && U.canAttackAsMafia(room, x.p));
   list = list.filter((x) => !atk.includes(x));
   if (atk.length) {
     const cnt = {};
@@ -200,8 +200,11 @@ function resolveNight(room) {
   }
 
   // ---- 5. 직업별 효과
+  const realPriv = priv;
   for (const x of list) {
     const { p, t } = x;
+    if (x.instant === 'skip') { U.touch(room, p, t); continue; } // 결과는 고르는 순간 이미 알려 줌
+    const priv = x.instant === 'wrap' ? ((who, text) => { if (who !== p) realPriv(who, text); }) : realPriv; // 본인 안내는 이미 보냄
     switch (p.role) {
       case 'spy': {
         priv(p, `🕵 조사 결과: ${t.name}님의 직업은 "${U.roleName(U.shownRole(t))}"입니다.`);
@@ -239,7 +242,7 @@ function resolveNight(room) {
         if (U.isMafiaKnown(t)) U.contact(room, p, t);
         U.touch(room, p, t); break;
       case 'thug':
-        if (t.role === 'soldier') { p.s.noVoteDay = day; priv(p, '👊 군인을 협박해서 오히려 자신의 투표권을 잃었습니다!'); }
+        if (t.role === 'soldier') { p.s.noVoteDay = day; priv(p, '👊 군인에게 협박을 시도하다 당했습니다. (능력이 자신에게 적용됨) 오늘은 투표할 수 없습니다.'); }
         else { t.s.noVoteDay = day; priv(t, '👊 협박당했습니다. 오늘은 투표할 수 없습니다.'); }
         U.touch(room, p, t); break;
       case 'doppelganger':
@@ -601,4 +604,51 @@ function resolveNight(room) {
   room.night = null;
 }
 
-module.exports = { startNight, resolveNight, checkAssassins };
+
+// 밤에 사람을 고르는 순간 결과를 바로 알려 주는 능력 (고른 뒤에는 바꿀 수 없다).
+// 반환: 'skip' = 아침 처리에서 건너뜀 / 'wrap' = 상태 변화는 아침에 하되 본인에게 가는 안내는 이미 보냄 / null = 바로 알려 주지 않는 능력
+function instantInfo(room, p, t) {
+  if (p.loaning || !t) return null;
+  const priv = (who, text) => U.priv(room, who, text);
+  const mafiaCheck = () => { if (U.isMafiaKnown(t)) U.contact(room, p, t); else priv(p, `🤝 ${t.name}님은 마피아가 아니었습니다.`); };
+  switch (p.role) {
+    case 'spy':
+      priv(p, `🕵 조사 결과: ${t.name}님의 직업은 "${U.roleName(U.shownRole(t))}"입니다.`);
+      p.s.known = p.s.known || {}; p.s.known[t.id] = U.shownRole(t);
+      if (t.role === 'soldier') priv(t, `🕵 스파이 ${p.name}님이 당신을 조사했습니다!`), priv(p, '⚠ 군인에게 정체를 들켰습니다!');
+      if (U.isMafiaKnown(t)) U.contact(room, p, t);
+      return 'skip';
+    case 'police':
+      priv(p, `🔍 조사 결과: ${t.name}님은 ${U.shownRole(t) === 'mafia' ? '마피아입니다.' : '마피아가 아닙니다.'}`);
+      return 'skip';
+    case 'inspector': {
+      const list = roleCandidates(room, t);
+      priv(p, `🔎 ${t.name}님의 직업 후보: ${list.map((k) => ROLE[k].name).join(' / ')} (이 중 하나가 진짜예요)`);
+      return 'skip';
+    }
+    case 'pharmacist':
+      if (U.pharmaArmed(room, p)) return null;
+      if (t.role === 'doctor') { p.s.doc = t.id; priv(p, `💉 ${t.name}님은 의사였습니다! 접선했어요. 의사가 죽으면 약을 줄 수 있습니다.`); }
+      else priv(p, `💉 ${t.name}님은 의사가 아니었습니다.`);
+      return 'skip';
+    case 'evil': case 'sniper':
+      mafiaCheck(); return 'skip';
+    case 'forger': case 'agitator':
+      if (p.contacted || U.canAttackAsMafia(room, p)) return null;
+      mafiaCheck(); return 'skip';
+    case 'medium':
+      priv(p, `🔮 성불 결과: ${t.name}님의 직업은 "${U.roleName(t.role)}"였습니다. (이제 ${t.name}님은 말할 수 없습니다)`);
+      return 'wrap';
+    case 'doppelganger':
+      if (U.canAttackAsMafia(room, p)) return null;
+      priv(p, `🎭 이제 조사 결과에서 "${U.roleName(t.role)}"(으)로 보입니다.`);
+      if (U.isMafiaKnown(t)) U.contact(room, p, t);
+      return 'wrap';
+    case 'ghost':
+      if (U.isMafiaKnown(t)) U.contact(room, p, t);
+      return 'wrap';
+    default: return null;
+  }
+}
+
+module.exports = { startNight, resolveNight, checkAssassins, instantInfo };

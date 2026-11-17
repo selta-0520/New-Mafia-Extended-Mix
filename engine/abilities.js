@@ -8,6 +8,12 @@ const ids = (l) => l.map((x) => x.id);
 // ------------------------------------------------------------ 밤 능력
 // 반환: { label, targets:[id], modes?, mode?, text?, pick, textValue } 또는 null(쓸 능력 없음)
 function nightOptions(room, p, modeOverride) {
+  const r = nightOptions0(room, p, modeOverride);
+  const a = r && room.night && room.night.acts[p.id];
+  if (r && a && a.done) r.locked = true; // 이미 결과를 받은 능력은 다시 고를 수 없다
+  return r;
+}
+function nightOptions0(room, p, modeOverride) {
   if (!p.alive || room.phase !== 'night' || !room.night) return null;
   if (p.s.blockNight === room.day) return null; // 유혹당함
   if (U.stolenBy(room, p)) return null; // 능력을 도둑맞음
