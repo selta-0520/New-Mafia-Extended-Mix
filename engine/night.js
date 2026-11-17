@@ -262,8 +262,8 @@ function resolveNight(room) {
         break;
       case 'detective': p.s.detA = t.id; U.touch(room, p, t); break;
       case 'reporter':
-        U.useOne(p, 'reporter'); p.s.report = { target: t.id, day: day + 1 };
-        priv(p, `📰 ${t.name}님에 대한 속보를 준비했습니다. 다음 날 아침에 공개됩니다.`);
+        U.useOne(p, 'reporter'); p.s.report = { target: t.id, day };
+        priv(p, `📰 ${t.name}님에 대한 속보를 준비했습니다. 오늘 아침에 공개됩니다.`);
         U.touch(room, p, t); break;
       case 'programmer':
         priv(t, `📨 익명의 메시지: ${String(x.text || '(내용 없음)').slice(0, 100)}`);
@@ -314,17 +314,21 @@ function resolveNight(room) {
           break;
         }
         const fake = x.mode && x.mode !== 'real' && ROLE[x.mode] ? x.mode : null;
-        U.useOne(p, 'agitator'); p.s.report = { target: t.id, day: day + 1, fake };
-        priv(p, `📰 ${t.name}님에 대한 속보를 준비했습니다.${fake ? ` 공개될 직업: "${U.roleName(fake)}" (거짓)` : ''} 다음 날 아침에 공개됩니다.`);
+        U.useOne(p, 'agitator'); p.s.report = { target: t.id, day, fake };
+        priv(p, `📰 ${t.name}님에 대한 속보를 준비했습니다.${fake ? ` 공개될 직업: "${U.roleName(fake)}" (거짓)` : ''} 오늘 아침에 공개됩니다.`);
         U.touch(room, p, t); break;
       }
       case 'thief': {
         p.s.stolenIds = (p.s.stolenIds || []).concat(t.id);
         U.touch(room, p, t);
-        if (LOANABLE.includes(t.role)) {
-          p.s.loan = t.role; p.s.lnS = {};
+        const usable = LOANABLE.includes(t.role);
+        if (usable) {
+          p.s.loan = t.role; p.s.lnS = {}; p.s.loanFrom = t.id;
           priv(p, `🧤 ${t.name}님의 직업은 "${U.roleName(t.role)}"였고, 그 능력을 훔쳤습니다! 다음 밤부터 딱 1번 쓸 수 있어요. (${ROLE[t.role].desc})`);
-        } else priv(p, `🧤 ${t.name}님의 직업은 "${U.roleName(t.role)}"였지만, 훔쳐서 쓸 수 있는 밤 능력이 없었습니다. (이 사람은 다시 고를 수 없어요)`);
+        } else priv(p, `🧤 ${t.name}님의 직업은 "${U.roleName(t.role)}"였습니다. 쓸 수 없는 능력이라 훔치기만 했어요. (우승 조건에는 포함돼요)`);
+        priv(t, usable ? '🧤 도둑맞았습니다! 도둑이 훔친 능력을 쓰기 전까지 당신은 능력을 쓸 수 없어요.' : '🧤 도둑맞았습니다!');
+        const left = room.players.filter((x) => x.alive && x !== p && !p.s.stolenIds.includes(x.id)).length;
+        priv(p, `🧤 아직 훔치지 못한 생존자: ${left}명${left ? '' : ' — 모두 훔쳤어요!'}`);
         break;
       }
       case 'assassin': attacks.push({ kind: 'assassin', by: p, t }); U.touch(room, p, t); break;
@@ -360,8 +364,10 @@ function resolveNight(room) {
     if (p.role !== 'madman') continue;
     const a = acts[p.id];
     if (!a || a.mode !== 'on' || !AB.nightOptions(room, p, 'on')) continue; // 안 쓰기로 했거나 유혹당함
-    const t = U.pick(U.alive(room));
-    attacks.push({ kind: 'madman', by: p, t });
+    const alive0 = U.alive(room);
+    const win = alive0.length >= 2 && alive0.length <= 3 && !alive0.some((x) => U.teamOf(x) === 'mafia'); // 마피아 팀 전멸 + 자신 포함 2~3명
+    const t = U.pick(alive0);
+    attacks.push({ kind: 'madman', by: p, t, win });
     U.touch(room, p, t);
   }
 
@@ -401,6 +407,7 @@ function resolveNight(room) {
   };
   const HOW = { super: '정체불명의 공격으로 사망했습니다.', mafia: '마피아에게 살해당했습니다.', potion: '정체불명의 공격으로 사망했습니다.', madman: '정체불명의 공격으로 사망했습니다.', destroy: '파괴당했습니다. (마피아의 공격이 아닙니다)', assassin: '정체불명의 공격으로 사망했습니다.', poison: '독에 중독되어 사망했습니다.', snipe: '저격으로 인해 사망했습니다.' };
   let mafiaFailMsg = null;
+  const madWins = [];
   for (const at of attacks) {
     let t = at.t;
     if (at.by && !attacked[t.id]) attacked[t.id] = at.by; // 목격자용: 공격받은 사람 기록
@@ -429,6 +436,7 @@ function resolveNight(room) {
       continue;
     }
     kill(t, HOW[at.kind], at.by, at.kind);
+    if (at.kind === 'madman' && at.win && t === at.by) madWins.push(at.by); // 미치광이: 조건을 채운 채 자신의 능력으로 죽었다
   }
 
   for (const p of selfSnipes) if (p.alive) kill(p, HOW.snipe, null, 'snipe'); // 자경단: 마피아 팀이 아니어서 자신이 죽는다
@@ -489,18 +497,19 @@ function resolveNight(room) {
   const imm = U.alive(room).filter((x) => x.s.voteImmune === day);
   if (imm.length) U.sys(room, `🛡 오늘은 ${U.names(imm)}님에게 투표할 수 없습니다.`);
 
-  // ---- 8.5 도박사: 예측한 사람이 이번 밤에 실제로 죽었는지 확인
-  let gamblerWin = null;
+  // ---- 8.5 도박사: 예측한 사람이 이번 밤에 죽었다면 적중. 아니면 그날 낮 투표가 끝날 때까지 기다린다 (U.gamblerSettle)
+  const gamblerWins = [];
   for (const g of U.alive(room)) {
     if (g.role !== 'gambler' || !g.s.gamble) continue;
-    const t = U.byId(room, g.s.gamble); g.s.gamble = null;
-    if (!t) continue;
-    const need = room.settings.gamblerHits;
+    const t = U.byId(room, g.s.gamble);
+    if (!t) { g.s.gamble = null; continue; }
     if (nightDeadIds.has(t.id) && !t.alive) {
+      g.s.gamble = null;
+      const need = room.settings.gamblerHits;
       g.s.hits = (g.s.hits || 0) + 1;
       priv(g, `🎰 예측 적중! ${t.name}님이 죽었습니다. (${g.s.hits}/${need})`);
-      if (g.s.hits >= need && !gamblerWin) gamblerWin = { kind: 'solo', ids: [g.id], text: `🎰 도박사 ${g.name}님이 ${need}번 적중시켜 혼자 우승했습니다!` };
-    } else priv(g, `🎰 빗나갔습니다. ${t.name}님은 죽지 않았어요. (${g.s.hits || 0}/${need})`);
+      if (g.s.hits >= need) gamblerWins.push({ kind: 'solo', ids: [g.id], text: `🎰 도박사 ${g.name}님이 ${need}번 적중시켜 혼자 우승했습니다!` });
+    } else priv(g, `🎰 ${t.name}님은 밤사이 죽지 않았어요. 오늘 낮 투표가 끝날 때까지 결과를 기다립니다.`);
   }
 
   // ---- 9. 지원자: 자신에게 능력을 쓴 사람의 직업 얻기
@@ -519,7 +528,7 @@ function resolveNight(room) {
     if (ls && ls.known) p.s.known = Object.assign(p.s.known || {}, ls.known);
     if (ls && ls.report) p.s.report = ls.report;
     if (p.role === 'magician' && ls && ls.detA) p.s.detA = ls.detA; // 마술사가 얻은 탐정: 밤에 고른 사람을 투표시간까지 기억
-    p.s.loan = null; p.s.lnS = null;
+    p.s.loan = null; p.s.lnS = null; p.s.loanFrom = null;
     if (p.role === 'thief') priv(p, '🧤 훔친 능력을 사용했습니다. 이제 다시 다른 사람의 능력을 훔칠 수 있어요.');
     else priv(p, `🎩 마술이 끝났습니다.${p.s.detA ? ' (탐정: 투표시간에 두 번째 사람을 골라요)' : ''} ${day + 2}일차 밤에 다시 쓸 수 있어요.`);
   }
@@ -556,7 +565,7 @@ function resolveNight(room) {
 
   // 기자 속보
   for (const p of room.players) {
-    if ((p.role === 'reporter' || p.role === 'thief' || p.role === 'agitator') && p.s.report && p.s.report.day === day) {
+    if ((p.role === 'reporter' || p.role === 'thief' || p.role === 'agitator' || p.role === 'magician') && p.s.report && p.s.report.day === day) {
       if (p.alive) {
         const t = U.byId(room, p.s.report.target);
         U.sys(room, `📰 속보! ${t.name}님의 직업은 "${U.roleName(p.s.report.fake || U.shownRole(t))}"입니다.`);
@@ -570,24 +579,24 @@ function resolveNight(room) {
     const beggar = rich.s.meetWith ? U.byId(room, rich.s.meetWith) : room.players.find((x) => x.role === 'beggar' && x.s.meetDay != null);
     if (!beggar || beggar.role !== 'beggar') continue;
     if (!rich.alive || !beggar.alive) { rich.s.meetDay = null; beggar.s.meetDay = null; }
-    else if (day >= rich.s.meetDay + 2 && !room.pendingWin) {
-      room.pendingWin = { kind: 'duo', ids: [rich.id, beggar.id], text: `💰 부자 ${rich.name}님과 거지 ${beggar.name}님이 우승했습니다!` };
+    else if (day >= rich.s.meetDay + 2) {
+      U.addWin(room, { kind: 'duo', ids: [rich.id, beggar.id], text: `💰 부자 ${rich.name}님과 거지 ${beggar.name}님이 우승했습니다!` });
     }
   }
-  if (gamblerWin && !room.pendingWin) room.pendingWin = gamblerWin;
-  if (!room.pendingWin) { // 행운아: 매일 밤 D50
+  for (const gw of gamblerWins) U.addWin(room, gw);
+  for (const m of madWins) U.addWin(room, { kind: 'solo', ids: [m.id], text: `🌀 미치광이 ${m.name}님이 마지막에 스스로 쓰러져 혼자 우승했습니다!` });
+  { // 행운아: 매일 밤 D50 (여럿이 동시에 맞추면 공동 우승)
     for (const lk of U.alive(room)) {
       if (lk.role !== 'lucky') continue;
       if (!lk.s.luckyNum) lk.s.luckyNum = 1 + Math.floor(Math.random() * 50);
       const roll = 1 + Math.floor(Math.random() * 50);
       priv(lk, `🎲 오늘 밤 주사위: ${roll} (내 번호: ${lk.s.luckyNum})${roll === lk.s.luckyNum ? ' — 적중!' : ''}`);
-      if (roll === lk.s.luckyNum && !room.pendingWin) room.pendingWin = { kind: 'solo', ids: [lk.id], text: `🎰 행운아 ${lk.name}님의 주사위가 ${roll}을 맞춰 혼자 우승했습니다!` };
+      if (roll === lk.s.luckyNum) U.addWin(room, { kind: 'solo', ids: [lk.id], text: `🎰 행운아 ${lk.name}님의 주사위가 ${roll}을 맞춰 혼자 우승했습니다!` });
     }
   }
-  if (!room.pendingWin) { // 내기꾼: 필요한 인원에게 가위바위보로 이겼고 아직 살아있다면 우승
+  { // 내기꾼: 필요한 인원에게 가위바위보로 이겼고 아직 살아있다면 우승
     const need = U.bettorNeed(room);
-    const bw = U.alive(room).find((x) => x.role === 'bettor' && (x.s.beaten || []).length >= need);
-    if (bw) room.pendingWin = { kind: 'solo', ids: [bw.id], text: `✊ 내기꾼 ${bw.name}님이 ${need}명에게 가위바위보로 이겨 혼자 우승했습니다!` };
+    for (const bw of U.alive(room).filter((x) => x.role === 'bettor' && (x.s.beaten || []).length >= need)) U.addWin(room, { kind: 'solo', ids: [bw.id], text: `✊ 내기꾼 ${bw.name}님이 ${need}명에게 가위바위보로 이겨 혼자 우승했습니다!` });
   }
   room.night = null;
 }

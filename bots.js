@@ -64,8 +64,6 @@ function syncSys(room) {
     let r;
     if (t.startsWith('🩺 마피아의 습격')) A.healedDay = room.day;
     else if ((r = /^📰 속보! (.+?)님의 직업은 "(.+?)"입니다/.exec(t))) { const q = byName(room, r[1]); if (q && ROLE_BY_NAME[r[2]]) A.pubRole[q.id] = ROLE_BY_NAME[r[2]]; }
-    else if ((r = /^🏛 정치인 (.+?)님은/.exec(t))) { const q = byName(room, r[1]); if (q) A.pubRole[q.id] = 'politician'; }
-    else if ((r = /^🌀 (.+?)님은 처형 투표에서/.exec(t))) { const q = byName(room, r[1]); if (q) A.pubRole[q.id] = 'madman'; }
     else if ((r = /^🛡 경호원 (.+?)님이 (.+?)님 대신 공격을 받았습니다! 공격한 사람은 (.+?)님입니다/.exec(t))) {
       const by = byName(room, r[3]); if (by) A.exposed = (A.exposed || {}), A.exposed[by.id] = (A.exposed[by.id] || 0) + 1;
     } else if (t.startsWith('🃏')) { A.claims = []; A.res = []; A.acc = []; A.vouch = []; A.intent = {}; for (const q of room.players) if (q.ai) { q.ai.checks = {}; q.ai.known = {}; q.ai.hint = {}; } }
@@ -362,7 +360,7 @@ function botNight(room, p) {
     act(room, p, { type: 'predict', guesses });
     return;
   }
-  if (p.role === 'agitator' && p.contacted && U.usesLeft(room, p, 'agitator') > 0) { // 선동가: 믿음직한 사람을 "마피아"로 속여 공개
+  if (p.role === 'agitator' && p.contacted && !U.canAttackAsMafia(room, p) && U.usesLeft(room, p, 'agitator') > 0) { // 선동가: 믿음직한 사람을 "마피아"로 속여 공개
     const o2 = E.AB.nightOptions(room, p);
     if (o2 && o2.targets.length && !chance(L.skip)) {
       const cs = o2.targets.map((id) => U.byId(room, id)).filter(Boolean);
@@ -390,7 +388,8 @@ function botNight(room, p) {
   if (ONCE.has(effRole(p)) && !worthUsing(room, p, opt)) return;
   if (opt.noTarget) { // 미치광이: 능력을 쓸지 말지
     const n = U.alive(room).length;
-    act(room, p, { type: 'night', target: null, mode: chance(n >= 8 ? 0.6 : n >= 5 ? 0.4 : n >= 4 ? 0.25 : 0.1) ? 'on' : 'off' });
+    const goal = n >= 2 && n <= 3 && !U.alive(room).some((x) => U.teamOf(x) === 'mafia'); // 우승 조건: 마피아 전멸 + 2~3명일 때 능력을 써서 자신이 죽기
+    act(room, p, { type: 'night', target: null, mode: chance(goal ? 0.95 : n >= 8 ? 0.6 : n >= 5 ? 0.4 : n >= 4 ? 0.25 : 0.1) ? 'on' : 'off' });
     return;
   }
   let mode = opt.mode;

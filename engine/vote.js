@@ -63,14 +63,15 @@ function resolveVote(room, opts) {
   } else if (leader) {
     const T = leader;
     if (opts.defense) U.sys(room, `⚖️ 찬반투표에서 찬성이 더 많아 ${T.name}님의 처형이 확정되었습니다.`);
-    if (T.role === 'politician') U.sys(room, `🏛 정치인 ${T.name}님은 투표로 죽지 않습니다!`);
-    else if (T.role === 'beggar' && !T.s.met) U.sys(room, `🙏 거지 ${T.name}님은 투표로 죽지 않습니다!`);
-    else if (T.role === 'madman' && U.usesLeft(room, T, 'madman') > 0) { U.useOne(T, 'madman'); U.sys(room, `🌀 ${T.name}님은 처형 투표에서 살아남았습니다!`); }
-    else if (T.role === 'fugitive' && !T.s.escaped) { T.s.escaped = true; U.sys(room, `🏃 ${T.name}님이 처형을 피해 도망쳤습니다! (이제 투표할 수 없습니다)`); }
-    else if (U.survive(room, T)) U.sys(room, `🍀 ${T.name}님은 처형에서 살아남았습니다!`);
+    const saved = () => U.sys(room, `🛡 ${T.name}님은 능력으로 인해 투표에서 살아남았습니다!`); // 자신의 능력으로 처형을 피하면 모두에게 알린다
+    if (T.role === 'politician') saved();
+    else if (T.role === 'beggar' && !T.s.met) saved();
+    else if (T.role === 'madman' && U.usesLeft(room, T, 'madman') > 0) { U.useOne(T, 'madman'); saved(); }
+    else if (T.role === 'fugitive' && !T.s.escaped) { T.s.escaped = true; U.sys(room, `🛡 ${T.name}님은 능력으로 인해 투표에서 살아남았습니다! (처형을 피해 도망쳤습니다. 이제 투표할 수 없습니다)`); }
+    else if (U.survive(room, T)) saved();
     else {
       U.io.kill(room, T, '투표로 처형되었습니다.');
-      if (T.role === 'attention' && !room.pendingWin) room.pendingWin = { kind: 'solo', ids: [T.id], text: `📣 관종 ${T.name}님이 투표로 처형되어 혼자 우승했습니다!` };
+      if (T.role === 'attention') U.addWin(room, { kind: 'solo', ids: [T.id], text: `📣 관종 ${T.name}님이 투표로 처형되어 혼자 우승했습니다!` });
       if (T.role === 'terrorist') { room.lastBoom = T.id; room.lastPick = null; } // 서버가 '마지막 선택' 시간을 열어 준다
     }
   } else {
@@ -139,9 +140,9 @@ function resolveVote(room, opts) {
   // 혁명가: 4일차 낮까지 아무도 능력을 쓰지 않았다면 단독 우승
   if (day >= 4) {
     const revs = room.players.filter((x) => x.alive && x.role === 'revolutionary' && !x.s.joined);
-    if (revs.length && !room.pendingWin) room.pendingWin = revs.length === 1
+    if (revs.length) U.addWin(room, revs.length === 1
       ? { kind: 'solo', ids: [revs[0].id], text: `✊ 혁명가 ${revs[0].name}님이 혼자 우승했습니다!` }
-      : { kind: 'duo', ids: revs.map((x) => x.id), text: `✊ 혁명가 ${U.names(revs)}님이 함께 우승했습니다!` };
+      : { kind: 'duo', ids: revs.map((x) => x.id), text: `✊ 혁명가 ${U.names(revs)}님이 함께 우승했습니다!` });
   }
 }
 
@@ -160,8 +161,12 @@ function resolveBoom(room, targetId) {
 }
 
 function checkWin(room) {
-  if (room.pendingWin) { const w = room.pendingWin; room.pendingWin = null; return w; }
   const alive = U.alive(room);
+  // 도둑(살아있는 모두의 능력을 훔침)·파괴자(자신 포함 2명만 남음)의 우승: 이미 이루어진 우승과 함께 동시에 이뤄지면 공동 우승
+  room.pendingWin = room.pendingWin || null;
+  for (const t of alive.filter((x) => U.thiefDone(room, x))) U.addWin(room, { kind: 'solo', ids: [t.id], text: `🧤 도둑 ${t.name}님이 살아있는 모든 사람의 능력을 훔쳐 혼자 우승했습니다!` });
+  if (alive.length === 2) for (const d of alive.filter((x) => x.role === 'destroyer')) U.addWin(room, { kind: 'solo', ids: [d.id], text: `💥 파괴자 ${d.name}님이 둘만 남아 혼자 우승했습니다!` });
+  if (room.pendingWin) { const w = room.pendingWin; room.pendingWin = null; return w; }
   if (!alive.length) return { kind: 'draw', text: '🤝 모두 사망하여 무승부입니다.', ids: [] };
   const M = alive.filter((p) => U.teamOf(p) === 'mafia').length;
   const C = alive.filter((p) => U.teamOf(p) === 'citizen').length;
@@ -180,8 +185,8 @@ function checkWin(room) {
     return m && m.alive && U.teamOf(m) === team;
   }).map((p) => p.id);
   const fText = (team, base) => { const f = followersOf(team); return f.length ? `${base} (신봉자 ${U.names(f.map((i) => U.byId(room, i)))}님도 함께 우승!)` : base; };
-  // 생존자·도둑: 마피아 팀 또는 시민 팀이 전멸했을 때 살아있으면 우승
-  const SS = alive.filter((p) => p.role === 'survivor' || p.role === 'thief');
+  // 생존자: 마피아 팀 또는 시민 팀이 전멸했을 때 살아있으면 우승
+  const SS = alive.filter((p) => p.role === 'survivor');
   if (SS.length && (M === 0 || C === 0)) {
     return { kind: 'neutral', text: `🍀 ${M === 0 ? '마피아' : '시민'} 팀이 전멸했습니다! ${SS.map((p) => `${U.roleName(p.role)} ${p.name}님`).join(', ')}이(가) 끝까지 살아남아 우승했습니다!`, ids: SS.map((p) => p.id) };
   }

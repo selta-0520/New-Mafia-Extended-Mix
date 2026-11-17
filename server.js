@@ -9,6 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { ROLES, ROLE, TEAM_NAMES, roleCap } = require('./roles');
 const E = require('./engine');
+const { NOTICES, VERSION } = require('./notices');
 const { U } = E;
 const Bots = require('./bots');
 
@@ -596,6 +597,7 @@ function finishVote(room, defense) {
 
 // 투표(와 테러리스트의 마지막 선택)가 끝난 뒤: 승패 판정 → 다음 밤
 function afterVote(room) {
+  U.gamblerSettle(room); // 도박사: 밤~낮 사이에 예측한 사람이 죽었는지 확정
   let w = E.checkWin(room);
   // 하루(밤+낮) 동안 아무도 죽지 않은 날이 6번 이어지면, 더 진행할 수 없는 상황으로 보고 무승부 처리
   if (!w) {
@@ -1044,9 +1046,9 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(fs.readFileSync(INDEX));
     }
-    if (route === 'GET /healthz') return json(res, 200, { ok: true, rooms: rooms.size });
+    if (route === 'GET /healthz') return json(res, 200, { ok: true, rooms: rooms.size, version: VERSION });
     if (route === 'GET /api/meta') {
-      return json(res, 200, { roles: ROLES, teams: TEAM_NAMES, limits: LIMITS, caps: Object.fromEntries(ROLES.map((r) => [r.key, roleCap(r.key)])), min: MIN_PLAYERS, max: MAX_PLAYERS });
+      return json(res, 200, { roles: ROLES, teams: TEAM_NAMES, limits: LIMITS, caps: Object.fromEntries(ROLES.map((r) => [r.key, roleCap(r.key)])), min: MIN_PLAYERS, max: MAX_PLAYERS, version: VERSION, notices: NOTICES });
     }
     if (route === 'GET /api/rooms') {
       if (limited(ip, 'check')) return json(res, 429, { error: '요청이 너무 많아요. 잠시 후 다시 해 주세요.' });
@@ -1139,7 +1141,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
-module.exports = { server, rooms, advance, startGame, E, createRoom, makePlayer, setPhase, handleAction, viewFor };
+module.exports = { server, rooms, advance, startGame, applySettings, E, createRoom, makePlayer, setPhase, handleAction, viewFor };
 if (require.main === module) {
   server.listen(PORT, '0.0.0.0', () => console.log(`NME 서버 실행 중: http://localhost:${PORT}`));
 }

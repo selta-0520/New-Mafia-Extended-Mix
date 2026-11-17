@@ -49,6 +49,8 @@ U.canAttackAsMafia = (room, p) => {
   if (!p.alive) return false;
   if (p.role === 'mafia') return true;
   if (p.role === 'doppelganger' && p.contacted) return !room.players.some((x) => x.alive && x.role === 'mafia');
+  // 위조범·선동가: 마피아가 모두 죽으면 마피아처럼 공격한다 (애초에 마피아가 없던 판에서는 접선한 뒤에만)
+  if ((p.role === 'forger' || p.role === 'agitator') && !p.loaning && !room.players.some((x) => x.alive && x.role === 'mafia')) return !!p.contacted || room.players.some((x) => x.role === 'mafia' || x.origRole === 'mafia');
   return false;
 };
 
@@ -114,6 +116,14 @@ U.pairUp = (room, players) => {
   for (let i = 0; i < Math.min(bs.length, rs.length); i++) link(bs[i], rs[i]);
 };
 U.mateOf = (room, p, role) => room.players.find((x) => x !== p && x.role === role && (p.s.pairId == null || x.s.pairId === p.s.pairId));
+// 같은 시점에 여러 우승 조건이 동시에 이루어지면 공동 우승으로 합친다 (순서·우선순위 없음)
+U.addWin = (room, w) => {
+  const cur = room.pendingWin;
+  if (!cur) { room.pendingWin = w; return; }
+  const ids = Array.from(new Set((cur.ids || []).concat(w.ids || [])));
+  const strip = (t) => String(t).replace(/^🏆 공동 우승! /, '').replace(/혼자 /g, '');
+  room.pendingWin = { kind: 'duo', ids, text: `🏆 공동 우승! ${strip(cur.text)} / ${strip(w.text)}`, joint: true };
+};
 // 히어로·빌런: 서로 접선해 슈퍼가 된 짝 (둘 다 상태가 맞아야 한다)
 U.superMate = (room, p) => {
   if (!p.s || !p.s.sup || !p.s.mate || (p.role !== 'hero' && p.role !== 'villain')) return null;
@@ -139,9 +149,32 @@ U.villainCheck = (room, p) => {
   U.setRole(room, p, 'mafia');
   return true;
 };
+// 도둑: 능력을 훔친 도둑이 아직 그 능력을 쓰지 않았다면, 훔쳐진 사람은 자신의 능력을 쓸 수 없다
+U.stolenBy = (room, p) => room.players.find((x) => x.alive && x.role === 'thief' && x.s && x.s.loan && x.s.loanFrom === p.id && x !== p);
+// 도둑의 우승: 살아있는 다른 모든 사람의 능력을 훔쳤다 (마피아·중립 등 쓸 수 없는 능력도 훔치기만 하면 센다)
+U.thiefDone = (room, p) => {
+  if (!p.alive || p.role !== 'thief') return false;
+  const others = room.players.filter((x) => x.alive && x !== p);
+  const got = p.s.stolenIds || [];
+  return others.length > 0 && others.every((x) => got.includes(x.id));
+};
+// 도박사: 예측한 사람이 (예측한 밤 ~ 다음 날 낮 투표가 끝날 때까지) 죽었으면 적중
+U.gamblerSettle = (room) => {
+  for (const g of U.alive(room)) {
+    if (g.role !== 'gambler' || !g.s.gamble) continue;
+    const t = U.byId(room, g.s.gamble); g.s.gamble = null;
+    if (!t) continue;
+    const need = room.settings.gamblerHits;
+    if (!t.alive) {
+      g.s.hits = (g.s.hits || 0) + 1;
+      U.priv(room, g, `🎰 예측 적중! ${t.name}님이 죽었습니다. (${g.s.hits}/${need})`);
+      if (g.s.hits >= need) U.addWin(room, { kind: 'solo', ids: [g.id], text: `🎰 도박사 ${g.name}님이 ${need}번 적중시켜 혼자 우승했습니다!` });
+    } else U.priv(room, g, `🎰 빗나갔습니다. ${t.name}님은 죽지 않았어요. (${g.s.hits || 0}/${need})`);
+  }
+};
 // 마술사: 능력을 쓸 수 있는 밤인가 (쓰고 나면 하루 쉰다)
 U.magicReady = (room, p) => !p.s.magicUsed || room.day >= p.s.magicUsed + 2;
-// 수호자: 그날 투표 후보에서 제외된 사람
+// 관리자: 그날 투표 후보에서 제외된 사람
 U.voteImmune = (room, p) => !!p && p.alive && p.s && p.s.voteImmune === room.day;
 
 // 도둑: 훔친 능력으로 잠시 바꿔서 실행한다 (역할·상태를 임시로 바꿨다가 되돌림)
