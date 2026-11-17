@@ -90,7 +90,7 @@ U.survive = (room, p) => {
 };
 
 // 파괴자가 한 판에 쓸 수 있는 횟수: 게임 시작 인원의 3분의 1 (내림, 최소 1번)
-U.destroyLimit = (room) => { const c = (room.settings && room.settings.destroyMax) | 0; return c > 0 ? c : Math.max(1, Math.floor((room.startN || room.players.length) / 3)); };
+U.destroyLimit = (room) => { const c = room.settings ? room.settings.destroyMax : -1; if (c != null && c >= 0) return c | 0; return Math.max(1, Math.floor((room.startN || room.players.length) / 3)); };
 // 횟수 제한이 있는 능력: 방 설정(settings.uses)으로 조절 (훔친 능력은 항상 1회)
 U.USE_KEYS = ['reporter', 'agitator', 'priest', 'angel', 'scientist', 'judge', 'soldier', 'madman', 'guardian'];
 U.dayRole = (p) => (p.role === 'magician' && p.s && p.s.dayLoan ? p.s.dayLoan : p.role); // 낮 능력 기준 직업 (마술사가 얻은 낮 능력 포함)

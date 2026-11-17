@@ -30,14 +30,14 @@ const LIMITS = {
   daySec: [15, 600],
   voteSec: [10, 120],
   defenseSec: [5, 60],
-  mafiaSize: [0, 25],
-  neutralSize: [0, 25],
-  citizenSize: [0, 50],
+  mafiaSize: [-1, 25], // -1 = 자동, 0 = 없음(마피아는 최소 1명)
+  neutralSize: [-1, 25],
+  citizenSize: [-1, 50],
   mafiaSpecialMax: [0, 10],
   citizenSpecialMax: [0, 40],
   neutralMax: [0, 10],
   gamblerHits: [1, 10],
-  destroyMax: [0, 10],
+  destroyMax: [-1, 10],
   heroStack: [1, 10],
 };
 const USES_LIMIT = [1, 5]; // 횟수 제한 능력의 최소~최대 사용 횟수
@@ -65,15 +65,15 @@ function defaultSettings() {
     voteSec: 30,
     finalDefense: true,
     defenseSec: 15,
-    mafiaSize: 0,
-    neutralSize: 0,
-    citizenSize: 0,
+    mafiaSize: -1, // -1 = 자동, 0 = 없음
+    neutralSize: -1,
+    citizenSize: -1,
     mafiaSpecialMax: 2,
     citizenSpecialMax: 12,
     neutralMax: 2,
     gamblerHits: 3,
     heroStack: 3, // 히어로가 시민 팀으로 전향하는 데 필요한 선행 스택
-    destroyMax: 0, // 파괴자 파괴 횟수 (0 = 자동: 시작 인원 ÷ 3)
+    destroyMax: -1, // 파괴자 파괴 횟수 (-1 = 자동: 시작 인원 ÷ 3, 0 = 파괴 불가)
     uses: Object.fromEntries(U.USE_KEYS.map((k) => [k, 1])), // 횟수 제한 능력의 사용 횟수
     abstain: false, // 투표 기권 허용
     teamKill: false, // 마피아 팀킬 허용 (마피아 팀이 같은 팀을 공격할 수 있음)

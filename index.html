@@ -1117,20 +1117,16 @@ $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') clos
 const CLASSIC_KEYS = ['police', 'doctor', 'soldier', 'reporter', 'politician', 'spy', 'madam', 'thug', 'detective', 'bodyguard'];
 const PRESETS = [
   { name: '4인 게임', note: '마피아 1 · 의사 1 · 경찰 1 · 시민 1', patch: () => exactPatch({ mafia: [1, 1], doctor: [1, 1], police: [1, 1], citizen: [0, 20] }, 1) },
-  { name: '8인 게임', note: '마피아 2 · 스파이/마담 중 1 · 의사 1 · 경찰 1 · 정치인/기자/건달/테러리스트/군인/영매 중 겹치지 않게 2 · 나머지는 시민 (누를 때마다 새로 뽑아요)', patch: () => {
-    const spec = { mafia: [2, 2], doctor: [1, 1], police: [1, 1], citizen: [0, 20] };
-    spec[pickN(['spy', 'madam'], 1)[0]] = [1, 1];
-    for (const k of pickN(['politician', 'reporter', 'thug', 'terrorist', 'soldier', 'medium'], 2)) spec[k] = [1, 1];
-    return exactPatch(spec, 3);
-  } },
-  { name: '클래식', patch: () => ({ enabledRoles: ['mafia', 'citizen', ...CLASSIC_KEYS], mafiaSpecialMax: 1, citizenSpecialMax: 5, neutralMax: 0, mafiaSize: 0, citizenSize: 0, neutralSize: 0 }) },
-  { name: '혼돈(전부)', patch: () => ({ enabledRoles: meta.roles.map((r) => r.key), mafiaSpecialMax: 2, citizenSpecialMax: 12, neutralMax: 2, mafiaSize: 0, citizenSize: 0, neutralSize: 0 }) },
-  { name: '중립 파티', patch: () => ({ enabledRoles: meta.roles.map((r) => r.key), mafiaSpecialMax: 1, citizenSpecialMax: 6, neutralMax: 5, mafiaSize: 0, citizenSize: 0, neutralSize: 0 }) },
-  { name: '마피아 팀 파티', patch: () => ({ enabledRoles: meta.roles.filter((r) => r.team === 'mafia' || ['citizen', 'police', 'doctor', 'soldier', 'bodyguard', 'detective'].includes(r.key)).map((r) => r.key), mafiaSpecialMax: 4, citizenSpecialMax: 5, neutralMax: 0, mafiaSize: 0, citizenSize: 0, neutralSize: 0 }) },
+  { name: '8인 게임', note: '마피아 2 · 스파이/마담 중 1 · 의사 1 · 경찰 1 · 정치인/기자/건달/테러리스트/군인/영매 중 2 · 시민 1 (후보 직업을 모두 켜 두고, 게임을 시작할 때마다 알아서 랜덤으로 나뉘어요)', patch: () => exactPatch({
+    mafia: [2, 2], spy: [0, 1], madam: [0, 1], doctor: [1, 1], police: [1, 1],
+    politician: [0, 1], reporter: [0, 1], thug: [0, 1], terrorist: [0, 1], soldier: [0, 1], medium: [0, 1], citizen: [0, 1],
+  }, 3) },
+  { name: '클래식', patch: () => ({ enabledRoles: ['mafia', 'citizen', ...CLASSIC_KEYS], mafiaSpecialMax: 1, citizenSpecialMax: 5, neutralMax: 0, mafiaSize: -1, citizenSize: -1, neutralSize: -1 }) },
+  { name: '혼돈(전부)', patch: () => ({ enabledRoles: meta.roles.map((r) => r.key), mafiaSpecialMax: 2, citizenSpecialMax: 12, neutralMax: 2, mafiaSize: -1, citizenSize: -1, neutralSize: -1 }) },
+  { name: '중립 파티', patch: () => ({ enabledRoles: meta.roles.map((r) => r.key), mafiaSpecialMax: 1, citizenSpecialMax: 6, neutralMax: 5, mafiaSize: -1, citizenSize: -1, neutralSize: -1 }) },
+  { name: '마피아 팀 파티', patch: () => ({ enabledRoles: meta.roles.filter((r) => r.team === 'mafia' || ['citizen', 'police', 'doctor', 'soldier', 'bodyguard', 'detective'].includes(r.key)).map((r) => r.key), mafiaSpecialMax: 4, citizenSpecialMax: 5, neutralMax: 0, mafiaSize: -1, citizenSize: -1, neutralSize: -1 }) },
 ];
 // 직업과 인원수를 정확히 정하는 프리셋: spec = { 직업: [최소, 최대] } (여기에 없는 직업은 꺼짐), mafiaTeam = 마피아 팀 총 인원
-const shuffled = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const pickN = (a, n) => shuffled(a).slice(0, n);
 function exactPatch(spec, mafiaTeam) {
   const roleMin = {}, roleMax = {};
   for (const r of meta.roles) {
@@ -1139,9 +1135,17 @@ function exactPatch(spec, mafiaTeam) {
     roleMin[r.key] = sp ? sp[0] : 0;
     roleMax[r.key] = sp ? sp[1] : (r.key === 'mafia' || r.key === 'citizen' ? meta.caps[r.key] : 1);
   }
-  return { enabledRoles: Object.keys(spec), roleMin, roleMax, mafiaSize: mafiaTeam, neutralSize: 0, neutralMax: 0, citizenSize: 0 };
+  return { enabledRoles: Object.keys(spec), roleMin, roleMax, mafiaSize: mafiaTeam, neutralSize: 0, neutralMax: 0, citizenSize: -1 };
 }
-const one = (k) => [k, [1, 1]];
+// 0 = 없음, 비워 두면(또는 "자동" 버튼) 자동(-1)
+function autoField(key, label, unit) {
+  const [lo, hi] = meta.limits[key];
+  return h('div', { class: 'field' },
+    h('div', null, label, h('div', { class: 'note' }, `0 = 없음 · 비움 = 자동 · 최대 ${hi}${unit}`)),
+    h('div', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' },
+      h('input', { type: 'number', inputmode: 'numeric', 'data-key': key, 'data-auto': '1', min: 0, max: hi, placeholder: '자동', onchange: (e) => sendPatch({ [key]: e.target.value === '' ? -1 : Number(e.target.value) }) }),
+      h('button', { class: 'ghost', style: 'white-space:nowrap;flex:none;padding:8px 12px', 'data-autobtn': key, onclick: () => sendPatch({ [key]: -1 }) }, '자동')));
+}
 function numField(key, label, unit) {
   const [lo, hi] = meta.limits[key];
   return h('div', { class: 'field' },
@@ -1166,12 +1170,18 @@ function snapshotSettings() {
   o.roleMin = Object.assign({}, s.roleMin); o.roleMax = Object.assign({}, s.roleMax);
   return o;
 }
+// v1.1.0 이전에 저장한 설정은 0이 "자동"이었다 → 지금은 -1
+function migrateSaved(x) {
+  const p = Object.assign({}, x.patch);
+  if (!x.v) for (const k of ['mafiaSize', 'neutralSize', 'citizenSize', 'destroyMax']) if (p[k] === 0) p[k] = -1;
+  return p;
+}
 function saveCurrentSettings() {
   if (!st) return;
   const name = (prompt('저장할 이름을 입력하세요 (최대 12자)', '내 설정') || '').trim().slice(0, 12);
   if (!name) return;
   const list = readSaved().filter((x) => x.name !== name);
-  list.unshift({ name, at: Date.now(), patch: snapshotSettings() });
+  list.unshift({ name, at: Date.now(), v: 2, patch: snapshotSettings() });
   lsSet(SAVED_KEY, JSON.stringify(list.slice(0, 20)));
   renderSaved(); toast(`"${name}" 설정을 저장했어요.`);
 }
@@ -1186,7 +1196,7 @@ function renderSaved() {
       h('div', { class: 'sn' }, x.name, h('span', { class: 'sd' }, x.at ? `${d.getMonth() + 1}/${d.getDate()} 저장` : '')),
       h('button', { 'data-load': x.name, onclick: () => {
         if (!canEditSettings()) { toast('방장만, 대기실에서만 불러올 수 있어요.'); return; }
-        if (confirm(`"${x.name}" 설정을 불러올까요?\n지금 설정이 바뀌어요.`)) sendPatch(x.patch).then(() => toast(`"${x.name}" 설정을 불러왔어요.`));
+        if (confirm(`"${x.name}" 설정을 불러올까요?\n지금 설정이 바뀌어요.`)) sendPatch(migrateSaved(x)).then(() => toast(`"${x.name}" 설정을 불러왔어요.`));
       } }, '불러오기'),
       h('button', { class: 'ghost', 'data-del': x.name, onclick: () => {
         if (!confirm(`"${x.name}" 저장 설정을 지울까요?`)) return;
@@ -1246,17 +1256,17 @@ function buildSettings() {
       h('button', { class: 'ghost', 'data-lv': k, onclick: () => { if (host) sendPatch({ botLevel: k }); } }, l))),
     h('div', { class: 'note', id: 'lvnote', style: 'margin-top:6px' }, ''),
     h('h3', null, '👥 팀별 인원수 조정'),
-    h('div', { class: 'note' }, '각 팀의 총 인원수예요. 0이면 자동이에요. (마피아는 참가 인원 ÷ 4) 예: 마피아 팀 3명 + 일반 마피아 최소 2명 → 일반 마피아 2명 + 마피아 팀 직업 1명. 세 팀 합이 참가 인원과 다르면 시민 팀이 나머지를 맡아요.'),
-    numField('mafiaSize', '마피아 팀 총 인원 (0 = 자동)', '명'),
-    numField('neutralSize', '중립 팀 총 인원 (0 = 자동)', '명'),
-    numField('citizenSize', '시민 팀 총 인원 (0 = 자동)', '명'),
+    h('div', { class: 'note' }, '각 팀의 총 인원수예요. 0은 "없음", 칸을 비우거나 [자동]을 누르면 "자동"이에요. (마피아 자동은 참가 인원 ÷ 4) 예: 마피아 팀 3명 + 일반 마피아 최소 2명 → 일반 마피아 2명 + 마피아 팀 직업 1명. 세 팀 합이 참가 인원과 다르면 시민 팀이 나머지를 맡아요.'),
+    autoField('mafiaSize', '마피아 팀 총 인원 (최소 1명)', '명'),
+    autoField('neutralSize', '중립 팀 총 인원', '명'),
+    autoField('citizenSize', '시민 팀 총 인원 (최소 1명)', '명'),
     h('h3', null, '🎰 도박사'),
     numField('gamblerHits', '우승에 필요한 적중 횟수', '번'),
     h('h3', null, '🔢 능력 사용 횟수'),
     h('div', { class: 'note' }, '횟수 제한이 있는 능력을 몇 번까지 쓸 수 있는지 정해요. (기본 1회)'),
     ...USE_FIELDS.map(([k, label]) => useField(k, label)),
     numField('heroStack', '🦸 히어로가 시민 팀으로 전향하는 데 필요한 선행 스택 (기본 3)', '번'),
-    numField('destroyMax', '💥 파괴자 파괴 횟수 (0 = 자동: 시작 인원 ÷ 3)', '번'),
+    autoField('destroyMax', '💥 파괴자 파괴 횟수 (자동 = 시작 인원 ÷ 3)', '번'),
     h('h3', null, '기타'),
     h('label', { class: 'field' }, h('span', null, '마피아 팀킬 허용 (마피아 팀이 같은 팀도 공격할 수 있음, 기본 꺼짐)'),
       h('input', { type: 'checkbox', 'data-key': 'teamKill', style: 'width:20px;height:20px', onchange: (e) => sendPatch({ teamKill: e.target.checked }) })),
@@ -1330,7 +1340,7 @@ function syncSettings(force) {
   for (const inp of sheet.querySelectorAll('input[data-key]')) {
     if (!force && document.activeElement === inp) continue;
     const k = inp.getAttribute('data-key');
-    if (inp.type === 'checkbox') inp.checked = !!s[k]; else inp.value = s[k];
+    if (inp.type === 'checkbox') inp.checked = !!s[k]; else inp.value = inp.getAttribute('data-auto') && s[k] < 0 ? '' : s[k];
     inp.disabled = !host;
   }
   const LVNOTE = { easy: '증거를 잘 따지지 못해 자주 틀려요. 가끔 행동을 빼먹고, 마피아도 실수로 팀원을 건드려요.', normal: '경찰 결과와 채팅을 참고해 의심하고, 마피아끼리 밤·투표를 맞춰요. 지목당하면 반박해요.',

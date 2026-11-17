@@ -71,10 +71,15 @@ function assignRoles(room) {
 
   // ---------------- 마피아 팀
   const mafiaKeys = keysOf('mafia');
-  const sizeSet = Math.max(0, s.mafiaSize | 0); // 0 = 자동(인원 ÷ 4), 그 외 = 마피아 팀 총 인원
-  const nSize = Math.max(0, s.neutralSize | 0), cSize = Math.max(0, s.citizenSize | 0);
+  // 팀 인원: 음수(-1) = 자동, 0 = 없음, 1 이상 = 그 인원. (마피아·시민 팀은 최소 1명)
+  const isAuto = (v) => v == null || v < 0;
+  const sizeSet = isAuto(s.mafiaSize) ? 0 : Math.max(1, s.mafiaSize | 0); // 0 = 자동(인원 ÷ 4), 그 외 = 마피아 팀 총 인원
+  const nSize = isAuto(s.neutralSize) ? -1 : Math.max(0, s.neutralSize | 0); // -1 자동, 0 없음
+  const cSize = isAuto(s.citizenSize) ? 0 : Math.max(1, s.citizenSize | 0); // 0 = 자동
+  if (!isAuto(s.mafiaSize) && (s.mafiaSize | 0) < 1) notes.push('⚠ 마피아 팀은 최소 1명이라 1명으로 했어요.');
+  if (!isAuto(s.citizenSize) && (s.citizenSize | 0) < 1) notes.push('⚠ 시민 팀은 최소 1명이라 1명으로 했어요.');
   let M = sizeSet > 0 ? sizeSet : Math.max(1, Math.floor(n / 4));
-  if (sizeSet === 0 && cSize > 0) M = Math.max(1, n - cSize - nSize); // 마피아는 자동이고 시민 인원을 정했다면 나머지가 마피아
+  if (sizeSet === 0 && cSize > 0) M = Math.max(1, n - cSize - Math.max(0, nSize)); // 마피아는 자동이고 시민 인원을 정했다면 나머지가 마피아
   const minMafia = mafiaKeys.reduce((a, k) => a + rng(k)[0] * SIZE(k), 0);
   const maxM = Math.max(1, Math.ceil(n / 2) - 1); // 시작하자마자 마피아 팀이 이기지 않도록
   if (sizeSet > 0 && minMafia > sizeSet) notes.push(`⚠ 마피아 팀 인원(${sizeSet}명)보다 직업별 최소 인원 합(${minMafia}명)이 커서 최소 인원을 우선했어요.`);
@@ -103,7 +108,7 @@ function assignRoles(room) {
       if (nUsed + SIZE(k) <= neutralHard) { add(k); nUsed += SIZE(k); } else if (!skipped.includes(k)) skipped.push(k);
     }
   }
-  const neutralCap = nSize > 0 ? Math.max(0, Math.min(nSize, neutralHard)) : Math.max(0, Math.min(s.neutralMax == null ? 2 : s.neutralMax, Math.floor(n / 5), neutralHard));
+  const neutralCap = nSize >= 0 ? Math.max(0, Math.min(nSize, neutralHard)) : Math.max(0, Math.min(s.neutralMax == null ? 2 : s.neutralMax, Math.floor(n / 5), neutralHard));
   for (;;) {
     const c = neutralKeys.filter((k) => cnt(k) < rng(k)[1] && nUsed + SIZE(k) <= Math.min(neutralCap, neutralHard));
     if (!c.length) break;
