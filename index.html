@@ -1117,9 +1117,9 @@ $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') clos
 const CLASSIC_KEYS = ['police', 'doctor', 'soldier', 'reporter', 'politician', 'spy', 'madam', 'thug', 'detective', 'bodyguard'];
 const PRESETS = [
   { name: '4인 게임', note: '마피아 1 · 의사 1 · 경찰 1 · 시민 1', patch: () => exactPatch({ mafia: [1, 1], doctor: [1, 1], police: [1, 1], citizen: [0, 20] }, 1) },
-  { name: '8인 게임', note: '마피아 2 · 스파이/마담 중 1 · 의사 1 · 경찰 1 · 정치인/기자/건달/테러리스트/군인/영매 중 2 · 시민 1 (후보 직업을 모두 켜 두고, 게임을 시작할 때마다 알아서 랜덤으로 나뉘어요)', patch: () => exactPatch({
+  { name: '8인 게임', note: '마피아 2 · 스파이/마담 중 1 · 의사 1 · 경찰 1 · 정치인/기자/건달/테러리스트/군인/영매 중 3 (후보 직업을 모두 켜 두고, 게임을 시작할 때마다 알아서 랜덤으로 나뉘어요)', patch: () => exactPatch({
     mafia: [2, 2], spy: [0, 1], madam: [0, 1], doctor: [1, 1], police: [1, 1],
-    politician: [0, 1], reporter: [0, 1], thug: [0, 1], terrorist: [0, 1], soldier: [0, 1], medium: [0, 1], citizen: [0, 1],
+    politician: [0, 1], reporter: [0, 1], thug: [0, 1], terrorist: [0, 1], soldier: [0, 1], medium: [0, 1], citizen: [0, 0],
   }, 3) },
   { name: '클래식', patch: () => ({ enabledRoles: ['mafia', 'citizen', ...CLASSIC_KEYS], mafiaSpecialMax: 1, citizenSpecialMax: 5, neutralMax: 0, mafiaSize: -1, citizenSize: -1, neutralSize: -1 }) },
   { name: '혼돈(전부)', patch: () => ({ enabledRoles: meta.roles.map((r) => r.key), mafiaSpecialMax: 2, citizenSpecialMax: 12, neutralMax: 2, mafiaSize: -1, citizenSize: -1, neutralSize: -1 }) },

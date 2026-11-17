@@ -1,6 +1,6 @@
 {
   "name": "nme",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "특수 직업이 있는 온라인 마피아 게임",
   "main": "server.js",
   "scripts": {
