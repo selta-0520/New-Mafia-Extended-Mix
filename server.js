@@ -900,13 +900,7 @@ function handleAction(room, p, b) {
         if (U.voteImmune(room, t)) fail('오늘은 투표 후보에서 제외된 사람이에요.');
         room.votes[p.id] = t.id;
       }
-      broadcastState(room);
-      // 투표할 수 있는 모두가 투표했으면 잠시 뒤 바로 개표
-      const seq = room.seq;
-      const done = () => alivePlayers(room).filter((x) => E.canVote(room, x)).every((x) => room.votes[x.id]);
-      if (done()) {
-        setTimeout(() => { if (room.seq === seq && room.phase === 'vote' && done()) safeAdvance(room); }, 1500);
-      }
+      broadcastState(room); // 모두 투표해도 투표 시간이 끝날 때까지 기다린다 (그 사이 투표를 바꿀 수 있다)
       return;
     }
     case 'rps': { // ✊ 내기꾼 가위바위보 (r 바위 / p 보 / s 가위)
@@ -966,10 +960,7 @@ function handleAction(room, p, b) {
       if (!E.confirmVoters(room).some((x) => x.id === p.id)) fail('지금은 투표할 수 없어요.');
       if (b.choice === 'yes' || b.choice === 'no') room.confirm[p.id] = b.choice;
       else delete room.confirm[p.id];
-      broadcastState(room);
-      const seq = room.seq;
-      const done = () => E.confirmVoters(room).every((x) => room.confirm[x.id]);
-      if (done()) setTimeout(() => { if (room.seq === seq && room.phase === 'confirm' && done()) safeAdvance(room); }, 1500);
+      broadcastState(room); // 찬반투표도 시간이 끝날 때까지 기다린다
       return;
     }
     default: fail('알 수 없는 요청이에요.');

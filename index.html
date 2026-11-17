@@ -67,7 +67,7 @@
   .actions{display:flex;gap:8px;flex-wrap:wrap}
   .actions button{flex:1;min-width:120px}
   /* 채팅 */
-  #chatbox{flex:0 0 36%;min-height:190px;max-height:320px;background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column}
+  #chatbox{flex:0 0 42%;min-height:240px;max-height:440px;background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column}
   #msgs{flex:1;overflow:auto;padding:8px 12px;font-size:14px;line-height:1.45}
   .m{margin:2px 0;word-break:break-word}
   .m b{margin-right:6px}
@@ -117,6 +117,7 @@
   .gp .k{font-weight:700}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
   .chips button{padding:7px 10px;font-size:13px;background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  #quick button{padding:3px 8px;font-size:11px}
   .chips button.on{color:#fff;border-color:transparent}
   .chips button.on.mafia{background:#b9374a} .chips button.on.citizen{background:#2f6fb8} .chips button.on.neutral{background:#a47d1c}
   .mine{font-size:11px;background:var(--accent);color:#fff;padding:1px 6px;border-radius:6px;margin-left:6px}
@@ -253,7 +254,7 @@
   <section id="main"></section>
   <section id="chatbox">
     <div id="msgs"></div>
-    <div class="chips" id="quick" style="padding:0 12px 4px"></div>
+    <div class="chips" id="quick" style="padding:0 12px 2px;margin-top:0"></div>
     <div id="chatlabel"></div>
     <form id="chatform" autocomplete="off">
       <input type="text" id="chatinput" maxlength="200" placeholder="메시지 입력">
@@ -412,18 +413,16 @@ function maybeTour() {
     h('div', { class: 'card role-card ' + r.team }, h('div', null, h('span', { class: 'rname' }, r.name), h('span', { class: 'rteam ptag ' + r.team }, teamName(st.me.team))), h('div', { class: 'rdesc' }, r.desc)),
     step('1.', '위쪽 "내 직업" 줄을 눌러 능력 설명을 먼저 읽어 보세요. (넓은 화면에서는 옆에 계속 보여요) 팀마다 이기는 조건이 달라요.'),
     step('2.', '🌙 밤에는 능력이 있으면 화면의 버튼으로 사람을 골라요. 능력이 없으면 기다리면 돼요.'),
-    step('3.', '☀️ 낮에는 채팅으로 의심되는 사람과 이유를 이야기해요. 아래 "빠른 반응" 버튼을 써도 돼요.'),
+    step('3.', '☀️ 낮에는 채팅으로 의심되는 사람과 이유를 이야기해요.'),
     step('4.', '🗳 투표에서 사람을 고르면 끝이에요. (방 설정에서 기권을 켜면 기권도 할 수 있어요.)'),
     step('💡', '직업이 헷갈리면 위쪽 📖 설명서의 "직업 도감"을 보세요. 사람 이름을 누르면 📝 직업 메모를 남길 수 있어요.'),
     h('button', { style: 'margin-top:12px', onclick: () => { try { localStorage.setItem('nme_tour', '1'); } catch (e) { /* */ } closeModal(); } }, '알겠어요, 시작할게요'));
   settingsOpen = false; $('#modal').hidden = false;
 }
 
-// ---- 💬 빠른 반응
-const QUICK = ['🤔 수상해요', '👍 동의해요', '🙋 저는 시민이에요', '🕊 신중하게 투표해요', '🔍 근거가 뭐죠?', '😅 잘 모르겠어요'];
+// ---- 💬 채팅 도구 (욕설 가림·차단)
 {
   const q = $('#quick');
-  for (const text of QUICK) q.append(h('button', { type: 'button', onclick: () => act('chat', { text }) }, text));
   q.append(h('button', { type: 'button', id: 'filterBtn', class: 'ghost', onclick: toggleFilter }, ''));
   q.append(h('button', { type: 'button', id: 'blockBtn', class: 'ghost', hidden: true, onclick: openBlockList }, ''));
   syncFilterBtn();
@@ -633,7 +632,6 @@ function render() {
   const ci = chatInfo();
   $('#chatlabel').textContent = ci.label;
   $('#chatinput').disabled = !ci.can; $('#chatsend').disabled = !ci.can;
-  for (const b of $('#quick').children) if (b.id !== 'filterBtn' && b.id !== 'blockBtn') b.disabled = !ci.can;
   $('#chatinput').placeholder = ci.can ? '메시지 입력' : '말할 수 없는 시간이에요';
   if (settingsOpen) syncSettings();
 }
@@ -761,7 +759,7 @@ function hintText() {
   if (st.phase === 'defense') return me.chat && me.chat.ch ? '🛡 당신이 처형 후보예요! 마지막으로 하고 싶은 말을 채팅으로 하세요.' : `🛡 ${st.defense ? st.defense.name : ''}님의 최후의 반론을 들어 보세요.`;
   if (st.phase === 'confirm') return (st.confirm && st.confirm.canVote) ? '⚖️ 처형에 찬성하나요, 반대하나요? (찬성이 더 많아야 처형, 동점이면 무효)' : '⚖️ 찬반투표 중이에요.';
   if (st.phase === 'day') return '☀️ 토론 시간입니다. 누가 마피아일지 자유롭게 이야기해 보세요.';
-  if (st.phase === 'vote') return me.canVote ? '🗳 처형할 사람을 선택하세요. 투표할 수 있는 모두가 투표하면 바로 개표해요. (다시 누르면 취소)' : '🚫 오늘은 투표할 수 없어요.';
+  if (st.phase === 'vote') return me.canVote ? '🗳 처형할 사람을 선택하세요. 투표 시간이 끝나면 개표해요. (다시 누르면 취소, 시간 안에는 바꿀 수 있어요)' : '🚫 오늘은 투표할 수 없어요.';
   return '';
 }
 
@@ -1441,7 +1439,7 @@ function buildGuide() {
       P('1일차 ', K('밤'), '부터 시작해요. 밤 → 아침(토론) → 투표 → 밤 … 순서로 돌아가요.'),
       P(K('밤'), ': 능력이 있는 직업은 카드를 눌러 대상을 골라요. 마피아는 팀끼리 한 명을 정해 죽여요.'),
       P(K('아침'), ': 밤에 일어난 일이 알려지고 자유롭게 토론해요.'),
-      P(K('투표'), ': 처형할 사람을 골라요. 최다 득표자가 ', K('한 명일 때만'), ' 처형되고, 동률이면 아무도 처형되지 않아요. 방 설정에서 기권을 켜면 기권도 할 수 있어요. 방 설정에 따라 자기 자신에게도 투표할 수 있어요. 투표할 수 있는 모두가 투표하면 바로 개표해요.'),
+      P(K('투표'), ': 처형할 사람을 골라요. 최다 득표자가 ', K('한 명일 때만'), ' 처형되고, 동률이면 아무도 처형되지 않아요. 방 설정에서 기권을 켜면 기권도 할 수 있어요. 방 설정에 따라 자기 자신에게도 투표할 수 있어요. 모두가 투표해도 투표 시간이 끝날 때까지 기다린 뒤 개표해요.'),
       P(K('테러리스트'), '가 투표로 처형되면 잠깐(15초) 동안 함께 죽을 사람을 고를 수 있어요.'),
       P(K('아침 시간 조절'), ': 살아 있는 사람은 아침마다 한 번, "10초 줄이기"와 "10초 늘리기" 중 하나를 쓸 수 있어요. 쓰면 모두에게 알려져요.'),
       h('h3', null, '🏆 승리 조건'),

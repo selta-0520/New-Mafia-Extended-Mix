@@ -168,7 +168,13 @@ function checkWin(room) {
   if (alive.length === 2) for (const d of alive.filter((x) => x.role === 'destroyer')) U.addWin(room, { kind: 'solo', ids: [d.id], text: `💥 파괴자 ${d.name}님이 둘만 남아 혼자 우승했습니다!` });
   if (room.pendingWin) { const w = room.pendingWin; room.pendingWin = null; return w; }
   if (!alive.length) return { kind: 'draw', text: '🤝 모두 사망하여 무승부입니다.', ids: [] };
-  const M = alive.filter((p) => U.teamOf(p) === 'mafia').length;
+  // 마피아 팀 직업(스파이 등)은 마피아와 접선하기 전까지 마피아 팀 인원으로 세지 않는다 (양쪽 어디에도 세지 않음).
+  // 단, 살아있는 진짜 마피아가 한 명도 없으면 남은 마피아 팀원은 모두 마피아 팀으로 센다.
+  const realMafia = alive.some((p) => p.role === 'mafia' && U.teamOf(p) === 'mafia');
+  const mTeam = alive.filter((p) => U.teamOf(p) === 'mafia');
+  const mCounted = mTeam.filter((p) => !realMafia || p.role === 'mafia' || p.contacted);
+  const M = mCounted.length;
+  const mIdle = mTeam.length - M; // 아직 접선 못 한 마피아 팀원
   const C = alive.filter((p) => U.teamOf(p) === 'citizen').length;
   const N = alive.filter((p) => U.teamOf(p) === 'neutral');
   const ids = (t) => room.players.filter((p) => U.teamOf(p) === t).map((p) => p.id);
@@ -190,7 +196,7 @@ function checkWin(room) {
   if (SS.length && (M === 0 || C === 0)) {
     return { kind: 'neutral', text: `🍀 ${M === 0 ? '마피아' : '시민'} 팀이 전멸했습니다! ${SS.map((p) => `${U.roleName(p.role)} ${p.name}님`).join(', ')}이(가) 끝까지 살아남아 우승했습니다!`, ids: SS.map((p) => p.id) };
   }
-  if (M > 0 && M >= alive.length - M) return { kind: 'mafia', text: fText('mafia', '🔪 마피아 팀이 승리했습니다!'), ids: ids('mafia').concat(followersOf('mafia')) };
+  if (M > 0 && M >= alive.length - M - mIdle) return { kind: 'mafia', text: fText('mafia', '🔪 마피아 팀이 승리했습니다!'), ids: ids('mafia').concat(followersOf('mafia')) };
   // 짝(부자/거지)이 죽어서 더는 이길 수 없는 거지·부자, 혼자서는 이길 수 없는 신봉자는 시민 승리를 막지 않는다
   const hasRole = (r) => alive.some((p) => p.role === r);
   const threat = N.filter((p) => p.role !== 'follower' && p.role !== 'prophet' && !((p.role === 'beggar' && !hasRole('rich')) || (p.role === 'rich' && !hasRole('beggar')) || ((p.role === 'hero' || p.role === 'villain') && !U.isSuper(room, p) && !hasRole(p.role === 'hero' ? 'villain' : 'hero'))));
